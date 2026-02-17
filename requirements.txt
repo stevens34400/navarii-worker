@@ -1,0 +1,6 @@
+arq>=0.26
+redis>=5.0
+sendgrid>=6.0
+supabase>=2.27.0
+pydantic-settings>=2.0
+python-dotenv>=1.0
