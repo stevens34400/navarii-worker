@@ -527,6 +527,67 @@ async def send_followup_notification(ctx: dict, booking_id: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Org invite email
+# ---------------------------------------------------------------------------
+
+async def send_org_invite_email(
+    ctx: dict,
+    *,
+    to_email: str,
+    org_name: str,
+    inviter_name: str,
+    invite_code: str,
+    role: str,
+    message: str | None = None,
+    invite_url: str = "",
+) -> None:
+    """Send org membership invite email."""
+    if not settings.NOTIFICATIONS_ENABLED:
+        return
+
+    template_id = settings.SENDGRID_ORG_INVITE_TEMPLATE_ID
+    if not template_id:
+        logger.warning("No SENDGRID_ORG_INVITE_TEMPLATE_ID configured, sending plain invite")
+        # Fallback: send a simple plain-text email
+        from sendgrid.helpers.mail import Mail, From, To, Content
+        sg = SendGridAdapter()
+        msg = Mail(
+            from_email=From(sg.from_email, "Navarii"),
+            to_emails=To(to_email),
+            subject=f"You're invited to join {org_name} on Navarii",
+        )
+        body = (
+            f"Hi!\n\n"
+            f"{inviter_name} has invited you to join {org_name} as a {role} on Navarii.\n\n"
+        )
+        if message:
+            body += f'They said: "{message}"\n\n'
+        body += f"Your invite code: {invite_code}\n\n"
+        if invite_url:
+            body += f"Join here: {invite_url}\n\n"
+        body += "— Navarii"
+        msg.add_content(Content("text/plain", body))
+        sg.client.send(msg)
+        logger.info("Sent plain org invite email to %s", to_email)
+        return
+
+    adapter = SendGridAdapter()
+    adapter.send_template_email(
+        to_email=to_email,
+        template_id=template_id,
+        dynamic_data={
+            "org_name": org_name,
+            "inviter_name": inviter_name,
+            "invite_code": invite_code,
+            "role": role,
+            "message": message or "",
+            "invite_url": invite_url,
+        },
+    )
+    logger.info("Sent org invite email to %s for org %s", to_email, org_name)
+
+
+# ---------------------------------------------------------------------------
 # ARQ WorkerSettings
 # ---------------------------------------------------------------------------
 
@@ -536,6 +597,7 @@ class WorkerSettings:
         send_booking_cancellation,
         send_reminder_notification,
         send_followup_notification,
+        send_org_invite_email,
     ]
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL) if settings.REDIS_URL else RedisSettings()
     max_jobs = 10

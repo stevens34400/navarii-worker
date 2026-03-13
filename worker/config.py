@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     SENDGRID_CANCELLATION_TEMPLATE_ID: str = ""
     SENDGRID_REMINDER_TEMPLATE_ID: str = ""
     SENDGRID_FOLLOWUP_TEMPLATE_ID: str = ""
+    SENDGRID_ORG_INVITE_TEMPLATE_ID: str = ""
 
     # Notifications
     NOTIFICATIONS_ENABLED: bool = True
