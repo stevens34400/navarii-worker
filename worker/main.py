@@ -588,6 +588,110 @@ async def send_org_invite_email(
 
 
 # ---------------------------------------------------------------------------
+# Offering invite email
+# ---------------------------------------------------------------------------
+
+async def send_offering_invite_email(
+    ctx: dict,
+    *,
+    to_email: str,
+    offering_title: str,
+    inviter_name: str,
+    org_name: str,
+    role: str,
+    message: str | None = None,
+    accept_url: str = "",
+) -> None:
+    """Send offering collaboration invite email to provider (on- or off-platform)."""
+    if not settings.NOTIFICATIONS_ENABLED:
+        return
+
+    template_id = settings.SENDGRID_OFFERING_INVITE_TEMPLATE_ID
+    if not template_id:
+        logger.warning("No SENDGRID_OFFERING_INVITE_TEMPLATE_ID configured, sending plain invite")
+        from sendgrid.helpers.mail import Mail, From, To, Content
+        sg = SendGridAdapter()
+        msg = Mail(
+            from_email=From(sg.from_email, "Navarii"),
+            to_emails=To(to_email),
+            subject=f"You're invited to collaborate on {offering_title}",
+        )
+        body = (
+            f"Hi!\n\n"
+            f"{inviter_name} has invited you to join \"{offering_title}\" as a {role} on Navarii.\n\n"
+        )
+        if org_name:
+            body += f"Organization: {org_name}\n\n"
+        if message:
+            body += f'They said: "{message}"\n\n'
+        if accept_url:
+            body += f"Accept here: {accept_url}\n\n"
+        body += "— Navarii"
+        msg.add_content(Content("text/plain", body))
+        sg.client.send(msg)
+        logger.info("Sent plain offering invite email to %s", to_email)
+        return
+
+    adapter = SendGridAdapter()
+    adapter.send_template_email(
+        to_email=to_email,
+        template_id=template_id,
+        dynamic_data={
+            "offering_title": offering_title,
+            "inviter_name": inviter_name,
+            "org_name": org_name,
+            "role": role,
+            "message": message or "",
+            "accept_url": accept_url,
+        },
+    )
+    logger.info("Sent offering invite email to %s for offering '%s'", to_email, offering_title)
+
+
+# ---------------------------------------------------------------------------
+# Lead confirmation email
+# ---------------------------------------------------------------------------
+
+async def send_lead_confirmation(
+    ctx: dict,
+    *,
+    email: str,
+    first_name: str = "",
+    user_type: str = "seeker",
+) -> None:
+    """Send welcome/confirmation email to a new lead."""
+    if not settings.NOTIFICATIONS_ENABLED:
+        return
+
+    template_id = settings.SENDGRID_LEAD_CONFIRMATION_TEMPLATE_ID
+    if not template_id:
+        logger.warning("No SENDGRID_LEAD_CONFIRMATION_TEMPLATE_ID configured, skipping")
+        return
+
+    adapter = SendGridAdapter()
+    adapter.send_template_email(
+        to_email=email,
+        template_id=template_id,
+        dynamic_data={
+            "first_name": first_name or "there",
+            "user_type": user_type,
+        },
+    )
+
+    # Log delivery
+    supabase = get_supabase_service()
+    _log_delivery(
+        supabase,
+        booking_id="",
+        user_id=None,
+        template_key="lead_confirmation",
+        destination=email,
+        status="sent",
+    )
+    logger.info("Sent lead confirmation email to %s", email)
+
+
+# ---------------------------------------------------------------------------
 # ARQ WorkerSettings
 # ---------------------------------------------------------------------------
 
@@ -598,6 +702,8 @@ class WorkerSettings:
         send_reminder_notification,
         send_followup_notification,
         send_org_invite_email,
+        send_offering_invite_email,
+        send_lead_confirmation,
     ]
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL) if settings.REDIS_URL else RedisSettings()
     max_jobs = 10
